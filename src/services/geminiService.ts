@@ -122,7 +122,8 @@ export async function analyzeProgram(programDescription: string) {
       "classification": "ALTA SINERGIA" | "SINERGIA PARCIAL" | "OPORTUNIDADE ESTRATÉGICA",
       "evidence": string,
       "isActive": boolean,
-      "deadline": string // Data ou "Não informado"
+      "deadline": string, // Data ou "Não informado"
+      "link": string // URL oficial do programa
     }
   `;
 
@@ -140,41 +141,148 @@ export async function analyzeProgram(programDescription: string) {
 export async function searchOpportunities(companyId: string | null) {
   const model = "gemini-3-flash-preview";
   
-  let context = "programas governamentais, editais, linhas de financiamento (BNDES, Caixa, Ministérios) e iniciativas institucionais no Brasil para municípios e estados.";
+  let context = `programas governamentais, editais, linhas de financiamento (BNDES, Caixa, Banco do Nordeste, Banco da Amazônia, FINEP), 
+  iniciativas de Ministérios (Cidades, Educação, Meio Ambiente, Justiça, Gestão, Comunicações, MCTI, Desenvolvimento Regional), 
+  Agências Reguladoras (ANATEL, ANA, ANTT, ANEEL), IBAMA, FUNASA, SENASP e organismos internacionais (Banco Mundial, BID, CAF, ONU, UNESCO) 
+  e programas ESG centrados em inovação, cidades inteligentes e modernização da gestão no Brasil.`;
   
   if (companyId) {
     const company = PARTNER_COMPANIES.find(c => c.id === companyId);
     if (company) {
-      context = `oportunidades institucionais, editais e programas governamentais (Ministérios, BNDES, Caixa) no Brasil voltados para ${company.area}. 
-      Foque em soluções como: ${company.solutions.join(", ")}. 
-      Busque por convênios com municípios e estados.`;
+      context = `oportunidades institucionais, editais e linhas de financiamento (Ministérios, BNDES, Caixa, Banco do Brasil, agências federativas) 
+      voltados para ${company.area} e soluções como: ${company.solutions.join(", ")}. 
+      Busque especificamente por programas federais, convênios municipais, chamadas públicas de inovação e projetos piloto de cidades inteligentes.`;
     }
   }
 
   const prompt = `
     Atue como um especialista em inteligência governamental e captação de recursos.
-    Pesquise e retorne uma lista de 4 a 6 oportunidades REAIS, RECENTES e que estejam OBRIGATORIAMENTE ATIVAS/ABERTAS (com prazo de inscrição ou vigência em andamento em ${new Date().toLocaleDateString('pt-BR')}) relacionadas a: ${context}.
+    Pesquise e retorne uma lista de 15 a 20 oportunidades REAIS, RECENTES e que estejam OBRIGATORIAMENTE ATIVAS/ABERTAS (com prazo de inscrição ou vigência em andamento em ${new Date().toLocaleDateString('pt-BR')}) relacionadas a: ${context}.
     
     Para cada oportunidade, forneça:
-    - **Nome do Programa/Edital**
-    - **Órgão Responsável**
-    - **Status/Prazo**: Informe se está aberto e qual o prazo final (se disponível).
-    - **Descrição**: Breve resumo do objetivo.
-    - **Justificativa de Enquadramento**: Explique detalhadamente por que esta oportunidade é ideal para as empresas parceiras mencionadas no contexto, citando sinergias específicas com suas soluções tecnológicas.
-    - **Link oficial** (se disponível)
+    1. Nome do Programa/Edital
+    2. Órgão Responsável
+    3. Status/Prazo
+    4. Descrição resumida
+    5. Justificativa de Enquadramento Estratégico
+    6. Link oficial
+    7. Trecho ou Evidência da política pública (citação curta)
     
-    IMPORTANTE: Não retorne programas encerrados ou editais cujos prazos já expiraram.
+    IMPORTANTE: Não retorne programas encerrados.
     
-    Formate a resposta em Markdown estruturado e profissional.
+    REGRAS CRÍTICAS PARA LINKS E URLs (EVITE ALUCINAÇÕES):
+    1. PROIBIDO INVENTAR: Nunca tente adivinhar, simplificar ou deduzir uma URL (ex: não invente bndes.gov.br/programa-x).
+    2. FONTE REAL: Use EXCLUSIVAMENTE os links literais retornados pela ferramenta de busca do Google. 
+    3. PRIORIDADE: Se encontrar o link do edital/página oficial, use-o.
+    4. BACKUP OBRIGATÓRIO: Se não houver um link "limpo", forneça o link da notícia ou da página de onde a informação foi extraída. É preferível um link de notícia real do que um link oficial inventado.
+    5. VALIDAÇÃO: Se você não tiver certeza absoluta do link, deixe o campo "link" vazio ou use o link da fonte de pesquisa.
+    
+    Retorne os dados EXCLUSIVAMENTE em formato JSON seguindo esta estrutura:
+    [
+      {
+        "name": string,
+        "institution": string,
+        "policyArea": string, // ex: segurança, educação, etc
+        "description": string,
+        "type": string, // edital, financiamento, etc
+        "audience": string,
+        "application": string, // Como as soluções se aplicam
+        "relatedCompanies": string[], // IDs: betha, arqia, contelurb, saber, datami, iris
+        "adherence": "Alta" | "Média" | "Baixa",
+        "strategy": string,
+        "classification": "ALTA SINERGIA" | "SINERGIA PARCIAL" | "OPORTUNIDADE ESTRATÉGICA",
+        "evidence": string,
+        "isActive": true,
+        "deadline": string,
+        "link": string
+      }
+    ]
   `;
 
   const response = await ai.models.generateContent({
     model,
     contents: prompt,
     config: {
-      tools: [{ googleSearch: {} }]
+      tools: [{ googleSearch: {} }],
+      responseMimeType: "application/json"
     }
   });
 
-  return response.text;
+  try {
+    const results = JSON.parse(response.text || "[]");
+
+    // Extract real grounding URLs from response metadata
+    const groundingChunks = (response as any).candidates?.[0]?.groundingMetadata?.groundingChunks;
+    const sources: { uri: string; title: string }[] = groundingChunks?.map((chunk: any) => ({
+      uri: chunk.web?.uri || "",
+      title: chunk.web?.title || "Fonte de Pesquisa"
+    })).filter((s: any) => s.uri) || [];
+
+    const webLinks: string[] = sources.map(s => s.uri);
+
+    // Filter for deep links (not just homepages)
+    const deepLinks = webLinks.filter(link => {
+      try {
+        const url = new URL(link);
+        return url.pathname.length > 5 || url.search.length > 5;
+      } catch {
+        return false;
+      }
+    });
+
+    // Sorted by length: longer URLs tend to be more specific pages
+    const sortedLinks = [...deepLinks].sort((a, b) => b.length - a.length);
+
+    const finalResults = results.map((op: any) => {
+      let finalLink = op.link;
+
+      // Determine if the link from the AI is suspicious / hallucinated
+      let isSuspicious = true;
+      try {
+        if (finalLink && finalLink.startsWith("http")) {
+          const url = new URL(finalLink);
+          isSuspicious =
+            url.pathname === "/" ||
+            url.pathname === "" ||
+            finalLink.length < 30 ||
+            finalLink.includes("exemplo.com") ||
+            finalLink.includes("link-do-edital") ||
+            finalLink.includes("link-oficial");
+        }
+      } catch {
+        isSuspicious = true;
+      }
+
+      if (isSuspicious) {
+        // Try to find a grounding source matching keywords from the program name or institution
+        const nameParts = (op.name || "").toLowerCase().split(" ").filter((w: string) => w.length > 4);
+        const instParts = (op.institution || "").toLowerCase().split(" ").filter((w: string) => w.length > 4);
+        const searchTerms = [...nameParts, ...instParts];
+
+        const bestMatch = sources.find(s => {
+          const combined = (s.title + " " + s.uri).toLowerCase();
+          return searchTerms.some(term => combined.includes(term));
+        })?.uri;
+
+        if (bestMatch) {
+          finalLink = bestMatch;
+        } else if (sortedLinks.length > 0) {
+          // Fall back to best .gov.br link in grounding results
+          finalLink =
+            sortedLinks.find(l => l.includes(".gov.br")) ||
+            sortedLinks[0] ||
+            "";
+        } else {
+          finalLink = "";
+        }
+      }
+
+      return { ...op, link: finalLink };
+    });
+
+    return finalResults;
+  } catch (e) {
+    console.error("Failed to parse Gemini response", e);
+    return [];
+  }
 }
