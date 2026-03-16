@@ -1,6 +1,6 @@
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle } from "docx";
 import { saveAs } from "file-saver";
-import { PARTNER_COMPANIES } from "./geminiService";
+import { PARTNER_COMPANIES, MINISTRIES } from "./geminiService";
 
 interface Opportunity {
   id: string;
@@ -21,10 +21,14 @@ interface Opportunity {
   deadline: string;
 }
 
-export async function generateCompanyReport(companyId: string | null, opportunities: Opportunity[]) {
+export async function generateCompanyReport(companyId: string | null, ministryId: string | null, opportunities: Opportunity[]) {
   const companyName = companyId 
     ? PARTNER_COMPANIES.find(c => c.id === companyId)?.name || "Empresa"
     : "Todas as Empresas";
+
+  const ministryName = ministryId
+    ? MINISTRIES.find(m => m.id === ministryId)?.name || "Ministério"
+    : "Todos os Ministérios";
 
   const doc = new Document({
     sections: [
@@ -44,6 +48,16 @@ export async function generateCompanyReport(companyId: string | null, opportunit
                 bold: true,
               }),
               new TextRun(companyName),
+            ],
+            spacing: { after: 100 },
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `Ministério: `,
+                bold: true,
+              }),
+              new TextRun(ministryName),
             ],
             spacing: { after: 100 },
           }),

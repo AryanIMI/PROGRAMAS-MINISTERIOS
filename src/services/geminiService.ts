@@ -81,6 +81,23 @@ export const PARTNER_COMPANIES = [
   }
 ];
 
+export const MINISTRIES = [
+  { id: "cidades", name: "Ministério das Cidades" },
+  { id: "educaçao", name: "Ministério da Educação" },
+  { id: "meio_ambiente", name: "Ministério do Meio Ambiente" },
+  { id: "justiça", name: "Ministério da Justiça" },
+  { id: "gestao", name: "Ministério da Gestão e Inovação" },
+  { id: "comunicaçoes", name: "Ministério das Comunicações" },
+  { id: "mcti", name: "Ministério da Ciência, Tecnologia e Inovação" },
+  { id: "desenvolvimento_regional", name: "Ministério do Desenvolvimento Regional" },
+  { id: "saude", name: "Ministério da Saúde" },
+  { id: "turismo", name: "Ministério do Turismo" },
+  { id: "agricultura", name: "Ministério da Agricultura e Pecuária" },
+  { id: "trabalho", name: "Ministério do Trabalho e Emprego" },
+  { id: "fazenda", name: "Ministério da Fazenda" },
+  { id: "planejamento", name: "Ministério do Planejamento e Orçamento" }
+];
+
 export async function analyzeProgram(programDescription: string) {
   const model = "gemini-3-flash-preview";
   
@@ -138,7 +155,7 @@ export async function analyzeProgram(programDescription: string) {
   return JSON.parse(response.text || "{}");
 }
 
-export async function searchOpportunities(companyId: string | null) {
+export async function searchOpportunities(companyId: string | null, ministryId?: string | null) {
   const model = "gemini-3-flash-preview";
   
   let context = `programas governamentais, editais, linhas de financiamento (BNDES, Caixa, Banco do Nordeste, Banco da Amazônia, FINEP), 
@@ -146,12 +163,20 @@ export async function searchOpportunities(companyId: string | null) {
   Agências Reguladoras (ANATEL, ANA, ANTT, ANEEL), IBAMA, FUNASA, SENASP e organismos internacionais (Banco Mundial, BID, CAF, ONU, UNESCO) 
   e programas ESG centrados em inovação, cidades inteligentes e modernização da gestão no Brasil.`;
   
+  if (ministryId) {
+    const ministry = MINISTRIES.find(m => m.id === ministryId);
+    if (ministry) {
+      context = `oportunidades, editais e linhas de financiamento vinculadas especificamente ao ${ministry.name}. 
+      Busque programas nacionais, convênios estaduais/municipais e chamadas públicas deste órgão.`;
+    }
+  }
+
   if (companyId) {
     const company = PARTNER_COMPANIES.find(c => c.id === companyId);
     if (company) {
-      context = `oportunidades institucionais, editais e linhas de financiamento (Ministérios, BNDES, Caixa, Banco do Brasil, agências federativas) 
-      voltados para ${company.area} e soluções como: ${company.solutions.join(", ")}. 
+      const companyContext = `Foque em oportunidades para ${company.area} e soluções como: ${company.solutions.join(", ")}. 
       Busque especificamente por programas federais, convênios municipais, chamadas públicas de inovação e projetos piloto de cidades inteligentes.`;
+      context = ministryId ? `${context} Além disso, certifique-se de que se aplicam a: ${companyContext}` : companyContext;
     }
   }
 

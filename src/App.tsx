@@ -24,7 +24,7 @@ import {
   Filter
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { PARTNER_COMPANIES, analyzeProgram, searchOpportunities } from './services/geminiService';
+import { PARTNER_COMPANIES, MINISTRIES, analyzeProgram, searchOpportunities } from './services/geminiService';
 import { cn } from './lib/utils';
 import { generateCompanyReport } from './services/reportService';
 
@@ -63,6 +63,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [analysisInput, setAnalysisInput] = useState('');
   const [selectedCompany, setSelectedCompany] = useState<string>('');
+  const [selectedMinistry, setSelectedMinistry] = useState<string>('');
   const [searchResults, setSearchResults] = useState<Opportunity[] | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
@@ -71,7 +72,7 @@ export default function App() {
     setIsSearching(true);
     setSearchError(null);
     try {
-      const results = await searchOpportunities(selectedCompany);
+      const results = await searchOpportunities(selectedCompany, selectedMinistry);
       setSearchResults(results.map((r: any) => ({
         ...r,
         id: Math.random().toString(36).substr(2, 9),
@@ -130,7 +131,7 @@ export default function App() {
                   alert("Selecione uma empresa primeiro.");
                   return;
                 }
-                generateCompanyReport(selectedCompany, currentOpportunities);
+                generateCompanyReport(selectedCompany, selectedMinistry, currentOpportunities);
               }}
               className="hidden md:flex items-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm"
             >
@@ -178,7 +179,31 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="flex flex-col md:flex-row items-center gap-4">
+              <div className="flex-1 max-w-md">
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                  <Filter className="w-3 h-3 text-indigo-500" />
+                  Selecione o Ministério (Opcional)
+                </label>
+                <div className="relative group">
+                  <select
+                    value={selectedMinistry || ''}
+                    onChange={(e) => setSelectedMinistry(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm font-bold rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 block p-3 transition-all appearance-none cursor-pointer hover:bg-white"
+                  >
+                    <option value="">Todos os Ministérios / Geral</option>
+                    {MINISTRIES.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400 group-hover:text-indigo-500 transition-colors">
+                    <ChevronRight className="w-5 h-5 rotate-90" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col md:flex-row items-center gap-4 flex-none">
                 <button
                   onClick={handleSearch}
                   disabled={isSearching || !selectedCompany}
@@ -208,7 +233,8 @@ export default function App() {
                   <div>
                     <h2 className="text-lg font-bold text-white mb-1">Radar de Inteligência IMI Oportunidades</h2>
                     <p className="text-sm text-indigo-100">
-                      Monitorando editais e programas para <span className="font-extrabold text-white underline underline-offset-4 decoration-indigo-300">{PARTNER_COMPANIES.find(c => c.id === selectedCompany)?.name}</span>
+                      Monitorando editais e programas {selectedMinistry && <span>do <span className="font-extrabold text-white underline underline-offset-4 decoration-indigo-300">{MINISTRIES.find(m => m.id === selectedMinistry)?.name}</span> </span>}
+                      para <span className="font-extrabold text-white underline underline-offset-4 decoration-indigo-300">{PARTNER_COMPANIES.find(c => c.id === selectedCompany)?.name || 'Empresas Parceiras'}</span>
                     </p>
                   </div>
                   <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-2 rounded-full border border-white/20">
@@ -224,7 +250,12 @@ export default function App() {
                 <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                   <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
                   Radar de Inteligência Estratégica
-                  {selectedCompany && <span className="ml-2 text-sm font-normal text-slate-500">para {PARTNER_COMPANIES.find(c => c.id === selectedCompany)?.name}</span>}
+                  {(selectedCompany || selectedMinistry) && (
+                    <span className="ml-2 text-sm font-normal text-slate-500">
+                      para {PARTNER_COMPANIES.find(c => c.id === selectedCompany)?.name || 'Empresas'}
+                      {selectedMinistry && ` no ${MINISTRIES.find(m => m.id === selectedMinistry)?.name}`}
+                    </span>
+                  )}
                 </h2>
                 <div className="flex items-center gap-3">
                   <button
@@ -233,7 +264,7 @@ export default function App() {
                         alert("Selecione uma empresa primeiro.");
                         return;
                       }
-                      generateCompanyReport(selectedCompany, currentOpportunities);
+                      generateCompanyReport(selectedCompany, selectedMinistry, currentOpportunities);
                     }}
                     className="md:hidden flex items-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-sm"
                   >
